@@ -1,0 +1,81 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: open-webui
+  namespace: ai-system
+spec:
+  parentRefs:
+  - name: internal
+    namespace: gateway-system
+    sectionName: apps-https
+  hostnames:
+  - chat.${DOMAIN}
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    timeouts:
+      request: 3600s
+      backendRequest: 3600s
+    backendRefs:
+    - name: open-webui
+      port: 8080
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: open-webui-gateway
+  namespace: ai-system
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-webui
+  ingress:
+  - fromEntities:
+    - ingress
+    toPorts:
+    - ports:
+      - port: '8080'
+        protocol: TCP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: litellm
+  namespace: ai-system
+spec:
+  parentRefs:
+  - name: internal
+    namespace: gateway-system
+    sectionName: apps-https
+  hostnames:
+  - llm.${DOMAIN}
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    timeouts:
+      request: 3600s
+      backendRequest: 3600s
+    backendRefs:
+    - name: litellm
+      port: 4000
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: litellm-gateway
+  namespace: ai-system
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: litellm
+  ingress:
+  - fromEntities:
+    - ingress
+    toPorts:
+    - ports:
+      - port: '4000'
+        protocol: TCP

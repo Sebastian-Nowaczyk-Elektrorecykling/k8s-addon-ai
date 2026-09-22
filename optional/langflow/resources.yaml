@@ -1,0 +1,219 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: langflow-db
+  namespace: ai-workflows
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  instances: 1
+  storage:
+    storageClass: longhorn-cnpg
+    size: 10Gi
+  bootstrap:
+    initdb:
+      database: app
+      owner: app
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: langflow-db-database
+  namespace: ai-workflows
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: langflow-db
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector: {}
+    ports:
+    - port: 5432
+      protocol: TCP
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: cnpg-system
+    ports:
+    - port: 8000
+      protocol: TCP
+    - port: 5432
+      protocol: TCP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: langflow-data
+  namespace: ai-workflows
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: ${AI_STORAGE_CLASS}
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: langflow
+  namespace: ai-workflows
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: langflow
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: langflow
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+      - name: langflow
+        image: langflowai/langflow:1.12.2@sha256:79c02794adebe82d756b7152ce4feebe4a5426e1faf3fe5b5d0dd08f304510c4
+        ports:
+        - name: http
+          containerPort: 7860
+        resources:
+          requests:
+            cpu: 100m
+            memory: 1Gi
+          limits:
+            memory: 4Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+          failureThreshold: 90
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 5
+        env:
+        - name: LANGFLOW_AUTO_LOGIN
+          value: 'false'
+        - name: LANGFLOW_HOST
+          value: 0.0.0.0
+        - name: LANGFLOW_PORT
+          value: '7860'
+        - name: LANGFLOW_CONFIG_DIR
+          value: /app/data
+        - name: DO_NOT_TRACK
+          value: 'true'
+        - name: LANGFLOW_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: langflow-db-app
+              key: uri
+        - name: LANGFLOW_SUPERUSER
+          valueFrom:
+            secretKeyRef:
+              name: langflow-auth
+              key: username
+        - name: LANGFLOW_SUPERUSER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: langflow-auth
+              key: password
+        - name: LANGFLOW_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: langflow-auth
+              key: secret-key
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: langflow-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: langflow
+  namespace: ai-workflows
+spec:
+  selector:
+    app.kubernetes.io/name: langflow
+  ports:
+  - name: http
+    port: 7860
+    targetPort: http
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: langflow
+  namespace: ai-workflows
+spec:
+  parentRefs:
+  - name: internal
+    namespace: gateway-system
+    sectionName: apps-https
+  hostnames:
+  - flows.${DOMAIN}
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    timeouts:
+      request: 3600s
+      backendRequest: 3600s
+    backendRefs:
+    - name: langflow
+      port: 7860
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: langflow-gateway
+  namespace: ai-workflows
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: langflow
+  ingress:
+  - fromEntities:
+    - ingress
+    toPorts:
+    - ports:
+      - port: '7860'
+        protocol: TCP

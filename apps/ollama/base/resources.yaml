@@ -1,0 +1,140 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-models
+  namespace: ai-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: ${AI_STORAGE_CLASS}
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: ai-system
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ollama
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ollama
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: ollama
+        image: ollama/ollama:0.34.2@sha256:da6e0dc5651df159e45686fd663c4dbe1624a52c44d7280eeac1551d8f865532
+        ports:
+        - name: http
+          containerPort: 11434
+        resources:
+          requests:
+            cpu: 500m
+            memory: 2Gi
+          limits:
+            memory: 8Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        startupProbe:
+          httpGet:
+            path: /api/tags
+            port: http
+          periodSeconds: 10
+          failureThreshold: 90
+        readinessProbe:
+          httpGet:
+            path: /api/tags
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /api/tags
+            port: http
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 5
+        env:
+        - name: OLLAMA_HOST
+          value: 0.0.0.0:11434
+        - name: OLLAMA_MODELS
+          value: /models
+        - name: OLLAMA_CONTEXT_LENGTH
+          value: '4096'
+        - name: OLLAMA_NUM_PARALLEL
+          value: '1'
+        - name: OLLAMA_MAX_LOADED_MODELS
+          value: '1'
+        - name: OLLAMA_KEEP_ALIVE
+          value: 5m
+        volumeMounts:
+        - name: data
+          mountPath: /models
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: ollama-models
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama
+  namespace: ai-system
+spec:
+  selector:
+    app.kubernetes.io/name: ollama
+  ports:
+  - name: http
+    port: 11434
+    targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ollama-clients
+  namespace: ai-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ollama
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ai-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: open-webui
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ai-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: litellm
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ai-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: model-pull
+    ports:
+    - port: 11434
+      protocol: TCP

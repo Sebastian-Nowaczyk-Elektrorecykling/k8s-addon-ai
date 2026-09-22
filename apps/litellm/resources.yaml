@@ -1,0 +1,147 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm
+  namespace: ai-system
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: litellm
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: litellm
+      annotations:
+        ai.elektro.internal/chat-model: ${AI_CHAT_MODEL}
+        ai.elektro.internal/embed-model: ${AI_EMBED_MODEL}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: litellm
+        image: ghcr.io/berriai/litellm:v1.101.0@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b
+        ports:
+        - name: http
+          containerPort: 4000
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+          limits:
+            memory: 2Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        startupProbe:
+          httpGet:
+            path: /health/liveliness
+            port: http
+          periodSeconds: 10
+          failureThreshold: 90
+        readinessProbe:
+          httpGet:
+            path: /health/readiness
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health/liveliness
+            port: http
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 5
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: litellm-db-app
+              key: uri
+        - name: LITELLM_MASTER_KEY
+          valueFrom:
+            secretKeyRef:
+              name: litellm-auth
+              key: master-key
+        - name: LITELLM_SALT_KEY
+          valueFrom:
+            secretKeyRef:
+              name: litellm-auth
+              key: salt-key
+        - name: UI_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: litellm-auth
+              key: username
+        - name: UI_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: litellm-auth
+              key: password
+        args:
+        - --config
+        - /etc/litellm/config.yaml
+        - --port
+        - '4000'
+        volumeMounts:
+        - name: config
+          mountPath: /etc/litellm
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: litellm-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm
+  namespace: ai-system
+spec:
+  selector:
+    app.kubernetes.io/name: litellm
+  ports:
+  - name: http
+    port: 4000
+    targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: litellm-clients
+  namespace: ai-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: litellm
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ai-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: open-webui
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ai-workflows
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: langflow
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ai-notebooks
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: notebook
+    ports:
+    - port: 4000
+      protocol: TCP

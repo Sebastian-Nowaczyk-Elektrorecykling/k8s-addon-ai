@@ -1,0 +1,46 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ollama-model-pull-v1
+  namespace: ai-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 7200
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: model-pull
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: pull
+        image: ollama/ollama:0.34.2@sha256:da6e0dc5651df159e45686fd663c4dbe1624a52c44d7280eeac1551d8f865532
+        env:
+        - name: OLLAMA_HOST
+          value: http://ollama:11434
+        - name: CHAT_MODEL
+          value: ${AI_CHAT_MODEL}
+        - name: EMBED_MODEL
+          value: ${AI_EMBED_MODEL}
+        command:
+        - /bin/sh
+        - -ec
+        args:
+        - ollama pull "$${CHAT_MODEL}"; ollama pull "$${EMBED_MODEL}"; ollama list
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL

@@ -1,0 +1,26 @@
+model_list:
+- model_name: local-chat
+  litellm_params:
+    model: ollama_chat/${AI_CHAT_MODEL}
+    api_base: http://ollama:11434
+- model_name: local-embeddings
+  litellm_params:
+    model: ollama/${AI_EMBED_MODEL}
+    api_base: http://ollama:11434
+  model_info:
+    mode: embedding
+- model_name: local-vllm
+  litellm_params:
+    model: openai/local-vllm
+    api_base: http://vllm:8000/v1
+    api_key: os.environ/VLLM_API_KEY
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  store_model_in_db: false
+litellm_settings:
+  drop_params: true
+  set_verbose: false
+router_settings:
+  num_retries: 2
+  timeout: 600

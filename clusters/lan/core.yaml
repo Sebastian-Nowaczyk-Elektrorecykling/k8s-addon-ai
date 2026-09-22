@@ -1,0 +1,279 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ai-foundation
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/part-of: ai-addons
+spec:
+  interval: 5m
+  retryInterval: 1m
+  timeout: 30m
+  path: ./infrastructure/foundation
+  prune: true
+  deletionPolicy: Orphan
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: ai-addons
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-settings
+    - kind: ConfigMap
+      name: ai-settings
+  dependsOn:
+  - name: cilium
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ai-databases
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/part-of: ai-addons
+spec:
+  interval: 5m
+  retryInterval: 1m
+  timeout: 30m
+  path: ./infrastructure/databases
+  prune: true
+  deletionPolicy: Orphan
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: ai-addons
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-settings
+    - kind: ConfigMap
+      name: ai-settings
+  dependsOn:
+  - name: ai-foundation
+  - name: storage-cnpg
+  - name: storage-classes
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ai-ollama
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/part-of: ai-addons
+spec:
+  interval: 5m
+  retryInterval: 1m
+  timeout: 30m
+  path: ./apps/ollama/cpu
+  prune: true
+  deletionPolicy: Orphan
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: ai-addons
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-settings
+    - kind: ConfigMap
+      name: ai-settings
+  dependsOn:
+  - name: ai-foundation
+  - name: storage-classes
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ai-models
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/part-of: ai-addons
+spec:
+  interval: 5m
+  retryInterval: 1m
+  timeout: 120m
+  path: ./apps/models
+  prune: true
+  deletionPolicy: Orphan
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: ai-addons
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-settings
+    - kind: ConfigMap
+      name: ai-settings
+  dependsOn:
+  - name: ai-ollama
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ai-qdrant
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/part-of: ai-addons
+spec:
+  interval: 5m
+  retryInterval: 1m
+  timeout: 30m
+  path: ./apps/qdrant
+  prune: true
+  deletionPolicy: Orphan
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: ai-addons
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-settings
+    - kind: ConfigMap
+      name: ai-settings
+  dependsOn:
+  - name: ai-foundation
+  - name: storage-classes
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ai-search
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/part-of: ai-addons
+spec:
+  interval: 5m
+  retryInterval: 1m
+  timeout: 30m
+  path: ./apps/searxng
+  prune: true
+  deletionPolicy: Orphan
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: ai-addons
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-settings
+    - kind: ConfigMap
+      name: ai-settings
+  dependsOn:
+  - name: ai-foundation
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ai-documents
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/part-of: ai-addons
+spec:
+  interval: 5m
+  retryInterval: 1m
+  timeout: 30m
+  path: ./apps/tika
+  prune: true
+  deletionPolicy: Orphan
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: ai-addons
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-settings
+    - kind: ConfigMap
+      name: ai-settings
+  dependsOn:
+  - name: ai-foundation
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ai-litellm
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/part-of: ai-addons
+spec:
+  interval: 5m
+  retryInterval: 1m
+  timeout: 30m
+  path: ./apps/litellm
+  prune: true
+  deletionPolicy: Orphan
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: ai-addons
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-settings
+    - kind: ConfigMap
+      name: ai-settings
+  dependsOn:
+  - name: ai-databases
+  - name: ai-models
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ai-webui
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/part-of: ai-addons
+spec:
+  interval: 5m
+  retryInterval: 1m
+  timeout: 30m
+  path: ./apps/open-webui
+  prune: true
+  deletionPolicy: Orphan
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: ai-addons
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-settings
+    - kind: ConfigMap
+      name: ai-settings
+  dependsOn:
+  - name: ai-litellm
+  - name: ai-qdrant
+  - name: ai-search
+  - name: ai-documents
+  - name: storage-classes
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ai-routes
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/part-of: ai-addons
+spec:
+  interval: 5m
+  retryInterval: 1m
+  timeout: 30m
+  path: ./infrastructure/routes
+  prune: true
+  deletionPolicy: Orphan
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: ai-addons
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-settings
+    - kind: ConfigMap
+      name: ai-settings
+  dependsOn:
+  - name: ai-webui
+  - name: gateway

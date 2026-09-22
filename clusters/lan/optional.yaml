@@ -1,0 +1,148 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ai-nvidia
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/part-of: ai-addons
+spec:
+  interval: 5m
+  retryInterval: 1m
+  timeout: 30m
+  path: ./optional/nvidia
+  prune: true
+  deletionPolicy: Orphan
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: ai-addons
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-settings
+    - kind: ConfigMap
+      name: ai-settings
+  dependsOn:
+  - name: ai-foundation
+  suspend: true
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ai-vllm
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/part-of: ai-addons
+spec:
+  interval: 5m
+  retryInterval: 1m
+  timeout: 30m
+  path: ./optional/vllm
+  prune: true
+  deletionPolicy: Orphan
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: ai-addons
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-settings
+    - kind: ConfigMap
+      name: ai-settings
+  dependsOn:
+  - name: ai-nvidia
+  - name: storage-classes
+  suspend: true
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ai-langflow
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/part-of: ai-addons
+spec:
+  interval: 5m
+  retryInterval: 1m
+  timeout: 30m
+  path: ./optional/langflow
+  prune: true
+  deletionPolicy: Orphan
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: ai-addons
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-settings
+    - kind: ConfigMap
+      name: ai-settings
+  dependsOn:
+  - name: ai-foundation
+  - name: storage-cnpg
+  - name: storage-classes
+  - name: gateway
+  suspend: true
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ai-notebook
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/part-of: ai-addons
+spec:
+  interval: 5m
+  retryInterval: 1m
+  timeout: 30m
+  path: ./optional/notebook
+  prune: true
+  deletionPolicy: Orphan
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: ai-addons
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-settings
+    - kind: ConfigMap
+      name: ai-settings
+  dependsOn:
+  - name: ai-foundation
+  - name: storage-classes
+  - name: gateway
+  suspend: true
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ai-mlflow
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/part-of: ai-addons
+spec:
+  interval: 5m
+  retryInterval: 1m
+  timeout: 30m
+  path: ./optional/mlflow
+  prune: true
+  deletionPolicy: Orphan
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: ai-addons
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-settings
+    - kind: ConfigMap
+      name: ai-settings
+  dependsOn:
+  - name: ai-foundation
+  - name: storage-cnpg
+  - name: storage-classes
+  - name: gateway
+  suspend: true

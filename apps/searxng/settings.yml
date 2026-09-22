@@ -1,0 +1,8 @@
+search:
+  formats:
+  - html
+  - json
+server:
+  image_proxy: false
+  limiter: false
+use_default_settings: true

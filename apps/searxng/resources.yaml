@@ -1,0 +1,141 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: searxng
+  namespace: ai-system
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: searxng
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: searxng
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+        runAsUser: 977
+        runAsGroup: 977
+        runAsNonRoot: true
+        fsGroup: 977
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+      - name: searxng
+        image: searxng/searxng:2026.9.22-019460e07@sha256:4109ebf36dc291931c5b43f5ee451c517085255aecfa71f8ffae21000ce5c5fa
+        ports:
+        - name: http
+          containerPort: 8080
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            memory: 1Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 10
+          failureThreshold: 90
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 5
+        env:
+        - name: SEARXNG_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: searxng-auth
+              key: secret-key
+        volumeMounts:
+        - name: settings
+          mountPath: /etc/searxng
+        - name: cache
+          mountPath: /var/cache/searxng
+      volumes:
+      - name: settings
+        emptyDir: {}
+      - name: defaults
+        configMap:
+          name: searxng-settings
+      - name: cache
+        emptyDir: {}
+      initContainers:
+      - name: settings
+        image: searxng/searxng:2026.9.22-019460e07@sha256:4109ebf36dc291931c5b43f5ee451c517085255aecfa71f8ffae21000ce5c5fa
+        command:
+        - /bin/sh
+        - -ec
+        - cp /defaults/settings.yml /etc/searxng/settings.yml
+        volumeMounts:
+        - name: defaults
+          mountPath: /defaults
+          readOnly: true
+        - name: settings
+          mountPath: /etc/searxng
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: searxng
+  namespace: ai-system
+spec:
+  selector:
+    app.kubernetes.io/name: searxng
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: searxng-clients
+  namespace: ai-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: searxng
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ai-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: open-webui
+    ports:
+    - port: 8080
+      protocol: TCP

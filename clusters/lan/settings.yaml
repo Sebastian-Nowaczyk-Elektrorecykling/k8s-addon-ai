@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-settings
+  namespace: flux-system
+data:
+  AI_STORAGE_CLASS: longhorn
+  AI_CHAT_MODEL: qwen3:1.7b
+  AI_EMBED_MODEL: nomic-embed-text:v1.5
+  AI_VLLM_MODEL: Qwen/Qwen3-4B

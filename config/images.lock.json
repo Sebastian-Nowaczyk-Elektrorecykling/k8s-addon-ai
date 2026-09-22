@@ -1,0 +1,15 @@
+{
+  "checked_at": "2026-09-22",
+  "images": {
+    "ollama": "ollama/ollama:0.34.2@sha256:da6e0dc5651df159e45686fd663c4dbe1624a52c44d7280eeac1551d8f865532",
+    "webui": "ghcr.io/open-webui/open-webui:v0.11.4@sha256:9591b13f13843c7721c2b8eaf7382846c81b3ffe126526d1888d1fed50c6a33f",
+    "litellm": "ghcr.io/berriai/litellm:v1.101.0@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b",
+    "qdrant": "qdrant/qdrant:v1.19.1@sha256:12364fe851b9f17356fc88189fc06d1b521262e04659ec7345975b00c9246a10",
+    "langflow": "langflowai/langflow:1.12.2@sha256:79c02794adebe82d756b7152ce4feebe4a5426e1faf3fe5b5d0dd08f304510c4",
+    "mlflow": "ghcr.io/mlflow/mlflow:v3.16.1-full@sha256:6af326440af64565c2ea5d1d28c9ee355f70a8d4af5b76e35938365e1ce2e428",
+    "vllm": "vllm/vllm-openai:v0.30.0@sha256:8a69ffad015f138d7170c4ddc429e230a3bc1c1719f67e14324749df200a4b90",
+    "searxng": "searxng/searxng:2026.9.22-019460e07@sha256:4109ebf36dc291931c5b43f5ee451c517085255aecfa71f8ffae21000ce5c5fa",
+    "tika": "apache/tika:3.3.1.0-full@sha256:d8e6ed96260ad89307a93195a1b856102987a818ac648502f8efbaf313d32470",
+    "notebook": "quay.io/jupyter/scipy-notebook:lab-4.6.3@sha256:c88fd047a38689b1fe621309eaa91d1f0637c5c1ef3bccb7509cfa92d2b508ca"
+  }
+}

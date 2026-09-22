@@ -1,0 +1,152 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: notebook-data
+  namespace: ai-notebooks
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: ${AI_STORAGE_CLASS}
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notebook
+  namespace: ai-notebooks
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: notebook
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: notebook
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+        runAsUser: 1000
+        runAsGroup: 100
+        runAsNonRoot: true
+        fsGroup: 100
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+      - name: notebook
+        image: quay.io/jupyter/scipy-notebook:lab-4.6.3@sha256:c88fd047a38689b1fe621309eaa91d1f0637c5c1ef3bccb7509cfa92d2b508ca
+        ports:
+        - name: http
+          containerPort: 8888
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+          limits:
+            memory: 4Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        startupProbe:
+          httpGet:
+            path: /login
+            port: http
+          periodSeconds: 10
+          failureThreshold: 90
+        readinessProbe:
+          httpGet:
+            path: /login
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /login
+            port: http
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 5
+        env:
+        - name: JUPYTER_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: notebook-auth
+              key: token
+        - name: JUPYTER_ENABLE_LAB
+          value: 'yes'
+        - name: OPENAI_BASE_URL
+          value: http://litellm.ai-system.svc.cluster.local:4000/v1
+        args:
+        - start-notebook.py
+        - --ServerApp.ip=0.0.0.0
+        - --ServerApp.allow_remote_access=True
+        volumeMounts:
+        - name: data
+          mountPath: /home/jovyan/work
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: notebook-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notebook
+  namespace: ai-notebooks
+spec:
+  selector:
+    app.kubernetes.io/name: notebook
+  ports:
+  - name: http
+    port: 8888
+    targetPort: http
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: notebook
+  namespace: ai-notebooks
+spec:
+  parentRefs:
+  - name: internal
+    namespace: gateway-system
+    sectionName: apps-https
+  hostnames:
+  - notebook.${DOMAIN}
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    timeouts:
+      request: 3600s
+      backendRequest: 3600s
+    backendRefs:
+    - name: notebook
+      port: 8888
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: notebook-gateway
+  namespace: ai-notebooks
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: notebook
+  ingress:
+  - fromEntities:
+    - ingress
+    toPorts:
+    - ports:
+      - port: '8888'
+        protocol: TCP
